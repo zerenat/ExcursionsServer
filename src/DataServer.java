@@ -11,47 +11,47 @@ public class DataServer extends Thread {
     java.sql.Connection connection = null;
     Statement statement = null;
     ResultSet results = null;
-    private String cabinNo;
     private Socket socket;
-    private BufferedReader readInput;
-    private PrintWriter writeOutput;
+    private BufferedReader input;
+    private PrintWriter output;
     private static ArrayList <String> usersOnline = new ArrayList<>();
-    private static ArrayList <ArrayList> cruises = new ArrayList<>();
-    private static ArrayList <String> cruise10 = new ArrayList<>();
-    private static ArrayList <String> cruise20 = new ArrayList<>();
 
     public DataServer(Socket socket) {
         this.socket = socket;
     }
     @Override
+
     public void run() {
         boolean b = true;
         while (b) {
             try {
-
                 //Declare new reader and writer to communicate with the client
-                readInput = new BufferedReader((new InputStreamReader(socket.getInputStream())));
-                writeOutput = new PrintWriter(socket.getOutputStream(), true);
-                String storeInput = readInput.readLine();
+                input = new BufferedReader((new InputStreamReader(socket.getInputStream())));
+                output = new PrintWriter(socket.getOutputStream(), true);
+                String storeInput = input.readLine();
                 if(storeInput != null) {
                     connectToDb(storeInput);
                 }
                 socket.getInputStream().read();
-                //b = false;
-            }
-            catch (IOException e) {
-                System.out.println("IO exception: "+e.getMessage());
-            }
-            catch (NullPointerException e){
-                System.out.println("nullpointer exception: "+e.getMessage());
-            }
-            catch (SQLException e){
+
+            } catch (IOException e) {
+                System.out.println("IO exception: "+e.toString());
+                e.printStackTrace();
+
+            } catch (SQLException e){
                 System.out.println("SQL Exception: "+e.getMessage());
+                e.printStackTrace();
+
+            } catch (NullPointerException e){
+                e.printStackTrace();
+
+            } finally {
+                b = false;
             }
         }
     }
 
-    //Method that takes the readInput string and sorts it into a String array in String chunks
+    //Method that takes the input string and sorts it into a String array in String chunks
     public String [] processInput(String input){
         String [] processedInput = input.split(",");
         return processedInput;
@@ -59,39 +59,34 @@ public class DataServer extends Thread {
     //Method that checks if a user account is logged in
     public boolean checkUsersOnline(String input){
         for(int i = 0; i < usersOnline.size(); i++){
-            //System.out.println(usersOnline.get(i));
-            if(usersOnline.get(i).equals(input)){//readInput.equals(usersOnline.get(i))
+            if(usersOnline.get(i).equals(input)){
                 System.out.println("input is: "+input);
                 return true;
             }
         }
         return false;
     }
-    public String [] processDbInfo(String input) {
-        String[] storeInfo;
-        storeInfo = input.split("|");
-        for (int x = 0; x < storeInfo.length; x++)
-            System.out.println(storeInfo[x]);
 
+//    public String [] processDbInfo(String input) {
+//        String[] storeInfo;
+//        storeInfo = input.split("|");
+//        for (int x = 0; x < storeInfo.length; x++)
+//            System.out.println(storeInfo[x]);
+//        return storeInfo;
+//    }
 
-
-
-        return storeInfo;
-    }
-
+    //Make a database connection
     public Connection makeConnection()throws SQLException {
         String username = "Client";
         String password = "ClientAccess";
-        String databaseName = "Cruise";
+        String databaseName = "groupproject";
         String databasePath = "jdbc:mysql://localhost:3306/"+databaseName+"?autoReconnect=true&useSSL=false";
         //String schoolDataBase = studentnet.cst.beds.ac.uk; //school DB
         //localhost:3306 //local DB
-
         //Try to make a connection to DB
         try{
             Class.forName("com.mysql.jdbc.Driver");
             connection = DriverManager.getConnection(databasePath, username, password);
-            statement = connection.createStatement();
         }
         catch (Exception e){
             System.out.println(e);
@@ -100,153 +95,250 @@ public class DataServer extends Thread {
     }
 
     //Connection method that connects to a DB and performs tasks on behalf of a client
+
     public void connectToDb(String input) throws SQLException{
+
         //First line takes a String and cuts it into chunks using processInput method
         //The first chunk in every message is a key that is later used by a switch statement
         //The key is essential for the program to know which action to perform
 
         String [] storeInput = processInput(input);
+
         try {
             makeConnection();
-            connection.createStatement();
+            Statement statement = connection.createStatement();
 
             //Creating a switch statement that processes the incoming message from the client
             //Using the value of the first element of the Array, the switch statement takes appropriate action
+
             switch (storeInput[0]) {
                 case "1":
                     //Register user
-                    //statement.executeUpdate("INSERT INTO customer (cabinNo, email, userpw) VALUE ("+storeInput[1]+",'"+storeInput[2]+"','"+storeInput[3]+"');");
+                    String name = storeInput[1];
+                    String customerEmail = storeInput[2];
+                    String cabinNo = storeInput[3];
+                    String password = storeInput[4];
+                    String cruiseID = storeInput[5];
                     boolean exists = false;
-                    results = statement.executeQuery("SELECT * FROM customers;");
+                    boolean cruiseExists = false;
+
+                    results = statement.executeQuery("SELECT customer.Email, customer.CabinNo FROM customer ");
                     while(results.next()) {
-                        if (storeInput[1].equals(results.getString("cabinNo"))) {
-                            System.out.println("Cabin number has already been used");
+                        if (customerEmail.equals(results.getString("Email")) && cabinNo.equals(results.getString("CabinNo"))) {
                             exists = true;
+                            output.println("Failed to register. Email and cabin already registered for this cruise");
                         }
                     }
-                    if(!exists) {
+                    results = statement.executeQuery("SELECT cruise_excursion.CruiseID FROM cruise_excursion");
+                    while(results.next()) {
+                        if (cruiseID.equals(results.getString("CruiseID"))) {
+                            cruiseExists = true;
+                        }
+                    }
+                    if(!cruiseExists){
+                    output.println("Entered Cruise ID doesn't exist");
+                    }
+                    if(!exists && cruiseExists) {
                         PreparedStatement prepStatementRegister = connection.prepareStatement
-                                ("INSERT INTO customers (cabinNo, email, userpw, cruiseId) VALUES (?, ?, ?, ?)");
-                        prepStatementRegister.setString(1, storeInput[1]);
-                        prepStatementRegister.setString(2, storeInput[2]);
-                        prepStatementRegister.setString(3, storeInput[3]);
-                        prepStatementRegister.setString(4, storeInput[4]);
+                                ("INSERT INTO customer (Name, Email, CabinNo, Password, CruiseID) VALUES (?, ?, ?, ?, ?)");
+                        prepStatementRegister.setString(1, name);
+                        prepStatementRegister.setString(2, customerEmail);
+                        prepStatementRegister.setString(3, cabinNo);
+                        prepStatementRegister.setString(4, password);
+                        prepStatementRegister.setString(5, cruiseID);
                         prepStatementRegister.executeUpdate();
-                        System.out.println("Cabin registered successfully.");
+                        output.println("Cabin registered successfully.");
                     }
                     break;
                 case "2":
                     //Log in
-                    //PreparedStatement prepStatementLogIn = connection.prepareStatement("SELECT * FROM customers;");
-                    results = statement.executeQuery("SELECT * FROM customers;");
+
+                    customerEmail = storeInput[1];
+                    password = storeInput[2];
+
+                    PreparedStatement prepStatement = connection.prepareStatement("SELECT customer.Email, customer.Password, customer.cruiseId FROM customer;");
+                    results = prepStatement.executeQuery();
                     while(results.next()){
-                        if(storeInput[1].equals(results.getString("cabinNo"))){
-                            if(storeInput[2].equals(results.getString("userpw")) && checkUsersOnline(storeInput[1])==false){
-                                //System.out.println("val: "+storeInput[1]);
+                        if(results.getString("Email").equals(customerEmail)) {
+                            String cruiseId = results.getString("cruiseId");
+                            if (password.equals(results.getString("Password"))){
+                                if(checkUsersOnline(customerEmail) == false) {
                                 usersOnline.add(storeInput[1]);
-                                for(int x= 0; x < usersOnline.size();x++){
+                                for (int x = 0; x < usersOnline.size(); x++) {
                                     System.out.println(usersOnline.get(x));
                                 }
-                                System.out.println("logged in");
-                            }
-                            else{
-                                System.out.println("user already online");
+                                output.println("Logged in successfully" + "," + cruiseId);
+                                } else if(usersOnline.contains(customerEmail)){
+                                    output.println("Login failed, user already logged in.");
+                                }
+
+                                else{
+                                    output.println("Login failed, incorrect user email or password");
+                                }
+                            }else{
+
                             }
                         }
                     }
+                    output.println("Invalid cabin number or password");
                     break;
                 case "3":
                     //Log out
                     cabinNo = storeInput[1];
                     usersOnline.remove(cabinNo);
+                    output.println("User logged out");
                     System.out.println("User logged out");
                     break;
                 case "4":
                     //View available excursions
-                    String cruiseId;
-                    results = statement.executeQuery("SELECT * FROM customers WHERE cabinNo = "+storeInput[1]);
-                    while(results.next()) {
-                        cruiseId = results.getString(5);
-                        results = statement.executeQuery("SELECT * FROM excursions WHERE cruiseId = " + cruiseId);
-                        while (results.next()) {
-                            System.out.println("Excursion ID - " + results.getString(1) + " | Excursion name - " + results.getString(4));
-                        }
+                    String cruiseId = storeInput[1];
+                    if(cruiseId.equals("none")){
+                        prepStatement = connection.prepareStatement("SELECT excursion.ExcursionName, excursion.Seats, excursion.ExcursionID " +
+                                "FROM cruise_excursion INNER JOIN excursion ON cruise_excursion.PortID = excursion.PortID");
+//                        prepStatement = connection.prepareStatement("SELECT excursion.ExcursionName, excursion.Seats, excursion.ExcursionID " +
+//                                "FROM customer INNER JOIN cruise_excursion ON customer.CruiseID = cruise_excursion.CruiseID " +
+//                                "INNER JOIN excursion ON cruise_excursion.PortID = excursion.PortID");
+                        results = prepStatement.executeQuery();
+                        System.out.println("Running first excursion retrieval");
+                    }else {
+//                        prepStatement = connection.prepareStatement("SELECT excursion.ExcursionName, excursion.Seats, excursion.ExcursionID " +
+//                                "FROM customer INNER JOIN cruise_excursion ON customer.CruiseID = cruise_excursion.CruiseID " +
+//                                "INNER JOIN excursion ON cruise_excursion.PortID = excursion.PortID WHERE customer.CruiseID = ?");
+                        prepStatement = connection.prepareStatement("SELECT excursion.ExcursionName, excursion.Seats, excursion.ExcursionID " +
+                                "FROM cruise_excursion INNER JOIN excursion ON cruise_excursion.PortID = excursion.PortID " +
+                                "WHERE cruise_excursion.CruiseID = ?");
+                        prepStatement.setString(1, cruiseId);
+                        results = prepStatement.executeQuery();
+                        System.out.println("Running second excursion retrieval");
                     }
+                    String result="";
+                    while(results.next()){
+                        result += results.getString("ExcursionName")+"_"+results.getString("Seats")+"_"+
+                                results.getString("Excursion.Seats")+"_"+results.getString("ExcursionID")+",";
+                    }
+                    System.out.println(result);
+                    System.out.println(result);
+                    output.println("result string is: "+result);
+                    results.close();
                     break;
                 case "5":
                     //Book excursions
-                    //storeInput[1] = cabin number; storeInput[2] = excursion id; storeInput[3] = number of required seats
-                    String excursionId;
-                    String portId;
-                    String excursionNames;
-                    String customerExcursions;
-                    String excursionBookings;
-                    int excursionAvailibility = 35;
-                    results = statement.executeQuery("SELECT * FROM excursions WHERE excursionId = "+storeInput[2]);
-                    while(results.next()){
-                        //Store fetched info in variables
-                        excursionId = results.getString(1);
-                        portId = results.getString(3);
-                        excursionNames = results.getString(4);
-                        excursionBookings = results.getString(5);
-                        results = statement.executeQuery("SELECT * FROM customers WHERE cabinNo = "+storeInput[1]);
-                        while(results.next()) {
-                            //Store and previous entries from customer's bookings. If there is none, set the value empty
-                            customerExcursions = results.getString(4);
-                            if(customerExcursions == null){
-                                customerExcursions = "";
-                            }
-                            //Check if excursion ID exists. If it does, update relevant tables
-                            if (excursionId.equals(storeInput[2])) {
-                                //Prepared statement update @ excursions - excursionBookings
-                                PreparedStatement updateExcursionBookings = connection.prepareStatement("UPDATE excursions SET excursionBookings = ? WHERE excursionId = ?");
-                                updateExcursionBookings.setString(1, excursionBookings + (" | " + storeInput[1] + " - " + storeInput[3]));
-                                //updateExcursionBookings.setString(1, String.valueOf((excursionBookings + Integer.parseInt(storeInput[3]))));
-                                updateExcursionBookings.setString(2, excursionId);
-                                updateExcursionBookings.executeUpdate();
+                    String excursionId = storeInput[1];
+                    customerEmail = storeInput[2];
+                    String requestedSeats = storeInput[3];
+                    String availableSeats = "";
+                    System.out.println(excursionId);
+                    System.out.println(customerEmail);
+                    System.out.println("req"+requestedSeats);
 
-                                //Prepared statement update @ customers - bookings
-                                System.out.println(storeInput[1]);
-                                PreparedStatement updateCustomerBookings = connection.prepareStatement("UPDATE customers SET bookings = ? WHERE cabinNo = ?");
-                                updateCustomerBookings.setString(1, (customerExcursions + "Port ID: " + portId + " - Excursion: " + excursionNames +"; "));
-                                updateCustomerBookings.setString(2, storeInput[1]);
-                                updateCustomerBookings.executeUpdate();
-                                System.out.println("updated");
-                            } else {
-                                System.out.println("Invalid Excursion ID");
-                            }
-                        }
+                    prepStatement = connection.prepareStatement("SELECT excursion.Seats FROM excursion WHERE excursion.ExcursionID = ?");
+                    prepStatement.setString(1, excursionId);
+                    results = prepStatement.executeQuery();
+                    while(results.next()){
+                        availableSeats = results.getString("excursion.Seats");
+                        System.out.println("Available seats:"+availableSeats);
                     }
-                    //Booking excursions
+
+                    if(Integer.parseInt(availableSeats) >= Integer.parseInt(requestedSeats)){
+                        availableSeats = String.valueOf(Integer.parseInt(availableSeats) - Integer.parseInt(requestedSeats));
+
+                        prepStatement = connection.prepareStatement("INSERT INTO excursion_customer VALUES (?, ?, ?)");
+                        prepStatement.setString(1, excursionId);
+                        prepStatement.setString(2, customerEmail);
+                        prepStatement.setString(3, requestedSeats);
+                        prepStatement.executeUpdate();
+
+                        prepStatement = connection.prepareStatement("UPDATE excursion SET excursion.Seats = ? WHERE excursion.ExcursionID = ?");
+                        prepStatement.setString(1, availableSeats);
+                        prepStatement.setString(2, excursionId);
+                        prepStatement.executeUpdate();
+                        output.println("Booking successful");
+                    }else{
+                        output.println("Not enough seats available");
+                    }
                     break;
                 case "6":
-                    //Update bookings
-                    ArrayList<String> storeInfo = new ArrayList<>();
-                    results = statement.executeQuery("SELECT * FROM cruiseinfo WHERE cruiseId = 10;");
-                    String info = "";
-                    while(results.next()){
-                        info = info + results.getString(5);
-                        //storeInfo.add(results.getString(5));
+                    //Get booking info
+                    customerEmail = storeInput[1];
+                    result = "";
+                    prepStatement = connection.prepareStatement("SELECT excursion.ExcursionName, excursion.Seats, excursion_customer.NoOfSeats " +
+                            ", excursion_customer.ExcursionID FROM excursion INNER JOIN excursion_customer ON excursion.ExcursionID = excursion_customer.ExcursionID " +
+                            "WHERE excursion_customer.Email = ?");
+                    prepStatement.setString(1, customerEmail);
+                    results = prepStatement.executeQuery();
+                    if(results.next()) {
+                        while (results.next()) {
+                            result += results.getString("excursion.ExcursionName") + "_" + results.getString("excursion.Seats") + "_"
+                                    + results.getString("excursion_customer.NoOfSeats") + "_" + results.getString("excursion_customer.ExcursionID") + ",";
+                        }
+                        output.println(result);
                     }
-                    //System.out.println(info);
-                    processDbInfo(info);
-                    /*for(int x=0; x<storeInfo.size();x++){
-                        System.out.println(storeInfo.get(x));
-                    }*/
+                    else{
+                        output.println("No information found");
+                    }
 
-
-                    //Updating excursions
+                    break;
                 case "7":
-                    //TEST
-                    String email = "10";//storeInput[1];
-                    PreparedStatement stmn = connection.prepareStatement("SELECT excursions.excursionName FROM cruiseInfo " +
-                            "INNER JOIN excursions ON cruiseInfo.excursionId = excursions.excursionId WHERE cruiseId = ?");
-                    stmn.setString(1,email);
-                    results = stmn.executeQuery();
-                    while (results.next()) {
-                        info = results.getString("excursionName") +",";
-                        System.out.println(info);
+                    //Update booking
+                    //Selection code - ExcursionID - Customer email - Requested seats - Modified requested seats
+                    excursionId = storeInput[1];
+                    customerEmail = storeInput[2];
+                    requestedSeats = storeInput[3];
+                    availableSeats = "";
+                    String originallyBookedSeats = storeInput[4];
+                    String newAvailableSeats = "";
+
+                    prepStatement = connection.prepareStatement("SELECT excursion.Seats FROM excursion WHERE excursion.ExcursionID = ?");
+                    prepStatement.setString(1, excursionId);
+                    results = prepStatement.executeQuery();
+                    while(results.next()){
+                        availableSeats = results.getString("excursion.Seats");
                     }
+                    System.out.println("Amount of available seats before addition: "+availableSeats);
+                    availableSeats = Integer.toString(Integer.parseInt(availableSeats)+ Integer.parseInt(originallyBookedSeats));
+                    System.out.println("Amount of available seats after addition: "+availableSeats);
+
+                    if(Integer.parseInt(availableSeats)>= Integer.parseInt(requestedSeats)){
+                        newAvailableSeats = Integer.toString(Integer.parseInt(availableSeats)-Integer.parseInt(requestedSeats));
+
+                        prepStatement = connection.prepareStatement("UPDATE excursion_customer SET excursion_customer.NoOfSeats = ?" +
+                                "WHERE excursion_customer.ExcursionID = ? AND excursion_customer.Email = ?;");
+                        prepStatement.setString(1, requestedSeats);
+                        prepStatement.setString(2, excursionId);
+                        prepStatement.setString(3, customerEmail);
+                        prepStatement.executeUpdate();
+
+                        prepStatement = connection.prepareStatement("UPDATE excursion SET excursion.Seats = ? " +
+                                "WHERE excursion.ExcursionID = ?;");
+                        prepStatement.setString(1, newAvailableSeats);
+                        prepStatement.setString(2, excursionId);
+                        prepStatement.executeUpdate();
+                        output.println("Booking changed successfully");
+                    }else{
+                        output.println("Failed to change booking");
+                        System.out.println("FAILED");
+                    }
+                    break;
+                case "8":
+                    //Cancel booking
+                    excursionId = storeInput[1];
+                    String bookedSeats = storeInput[2];
+                    availableSeats = storeInput[3];
+
+                    availableSeats = Integer.toString(Integer.parseInt(bookedSeats) + Integer.parseInt(availableSeats));
+
+                    prepStatement = connection.prepareStatement("DELETE FROM excursion_customer WHERE ExcursionID = ?");
+                    prepStatement.setString(1, excursionId);
+                    prepStatement.executeUpdate();
+
+                    prepStatement = connection.prepareStatement("UPDATE excursion SET excursion.Seats = ? " +
+                            "WHERE excursion.ExcursionID = ?");
+                    prepStatement.setString(1,availableSeats);
+                    prepStatement.setString(2,excursionId);
+                    prepStatement.executeUpdate();
+
+                    output.println("Booking deleted successfully");
+                    break;
             }
         }
         catch(SQLException e){
@@ -254,8 +346,8 @@ public class DataServer extends Thread {
         }
         catch(ArrayIndexOutOfBoundsException e){
             System.out.println("Array Index out of bounds");
-        }
-        finally{
+            e.printStackTrace();
+        } finally{
             if(statement!=null){
                 try{
                     statement.close();
@@ -283,44 +375,3 @@ public class DataServer extends Thread {
         }
     }
 }
-
-
-/*
-    public Threader(Socket socket){
-        this.socket = socket;
-    }
-
-    @Override
-    public void run(){
-        try {
-            BufferedReader readInput = new BufferedReader((new InputStreamReader(socket.getInputStream())));
-            PrintWriter writeOutput = new PrintWriter(socket.getOutputStream(), true);
-            while(true){
-                String echoString = readInput.readLine();
-                System.out.println("Received client readInput: "+echoString);
-                if(echoString.equals("exit")){
-                    break;
-                }
-                */
-/*try{
-                    Thread.sleep(15000);
-                }
-                catch(InterruptedException e){
-                    System.out.println("Thread interrupted");
-                }
-                writeOutput.println(echoString);*//*
-
-            }
-
-        }catch(IOException e){
-            System.out.println("Oops: " + e.getMessage());
-        }finally{
-            try{
-                socket.close();
-            }catch(IOException e){
-                //later!
-            }
-        }
-    }
-}
-*/
