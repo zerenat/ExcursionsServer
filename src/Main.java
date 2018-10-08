@@ -3,6 +3,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 public class Main {
+    //Create a ServerSocket and wit for connection
     public static void main(String[] args) throws IOException {
         try {
             int portNumber = 40450;

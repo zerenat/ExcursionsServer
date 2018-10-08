@@ -22,20 +22,18 @@ public class DataServer extends Thread {
     @Override
 
     public void run() {
-        boolean b = true;
-        while (b) {
+        boolean active = true;
+        while (active) {
             try {
-                //Declare new reader and writer to communicate with the client
                 input = new BufferedReader((new InputStreamReader(socket.getInputStream())));
                 output = new PrintWriter(socket.getOutputStream(), true);
                 String storeInput = input.readLine();
                 if(storeInput != null) {
                     connectToDb(storeInput);
                 }
-                socket.getInputStream().read();
 
             } catch (IOException e) {
-                System.out.println("IO exception: "+e.toString());
+                System.out.println("IO exception: "+e.getMessage());
                 e.printStackTrace();
 
             } catch (SQLException e){
@@ -43,10 +41,11 @@ public class DataServer extends Thread {
                 e.printStackTrace();
 
             } catch (NullPointerException e){
+                System.out.println("NullPointer Exception: "+e.getMessage());
                 e.printStackTrace();
 
             } finally {
-                b = false;
+                active = false;
             }
         }
     }
@@ -67,29 +66,20 @@ public class DataServer extends Thread {
         return false;
     }
 
-//    public String [] processDbInfo(String input) {
-//        String[] storeInfo;
-//        storeInfo = input.split("|");
-//        for (int x = 0; x < storeInfo.length; x++)
-//            System.out.println(storeInfo[x]);
-//        return storeInfo;
-//    }
-
     //Make a database connection
     public Connection makeConnection()throws SQLException {
         String username = "Client";
         String password = "ClientAccess";
         String databaseName = "groupproject";
         String databasePath = "jdbc:mysql://localhost:3306/"+databaseName+"?autoReconnect=true&useSSL=false";
-        //String schoolDataBase = studentnet.cst.beds.ac.uk; //school DB
-        //localhost:3306 //local DB
-        //Try to make a connection to DB
+
         try{
             Class.forName("com.mysql.jdbc.Driver");
             connection = DriverManager.getConnection(databasePath, username, password);
         }
         catch (Exception e){
             System.out.println(e);
+            e.printStackTrace();
         }
         return connection;
     }
@@ -195,15 +185,9 @@ public class DataServer extends Thread {
                     if(cruiseId.equals("none")){
                         prepStatement = connection.prepareStatement("SELECT excursion.ExcursionName, excursion.Seats, excursion.ExcursionID " +
                                 "FROM cruise_excursion INNER JOIN excursion ON cruise_excursion.PortID = excursion.PortID");
-//                        prepStatement = connection.prepareStatement("SELECT excursion.ExcursionName, excursion.Seats, excursion.ExcursionID " +
-//                                "FROM customer INNER JOIN cruise_excursion ON customer.CruiseID = cruise_excursion.CruiseID " +
-//                                "INNER JOIN excursion ON cruise_excursion.PortID = excursion.PortID");
                         results = prepStatement.executeQuery();
                         System.out.println("Running first excursion retrieval");
                     }else {
-//                        prepStatement = connection.prepareStatement("SELECT excursion.ExcursionName, excursion.Seats, excursion.ExcursionID " +
-//                                "FROM customer INNER JOIN cruise_excursion ON customer.CruiseID = cruise_excursion.CruiseID " +
-//                                "INNER JOIN excursion ON cruise_excursion.PortID = excursion.PortID WHERE customer.CruiseID = ?");
                         prepStatement = connection.prepareStatement("SELECT excursion.ExcursionName, excursion.Seats, excursion.ExcursionID " +
                                 "FROM cruise_excursion INNER JOIN excursion ON cruise_excursion.PortID = excursion.PortID " +
                                 "WHERE cruise_excursion.CruiseID = ?");
@@ -276,7 +260,6 @@ public class DataServer extends Thread {
                     else{
                         output.println("No information found");
                     }
-
                     break;
                 case "7":
                     //Update booking
