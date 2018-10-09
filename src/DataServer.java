@@ -326,6 +326,7 @@ public class DataServer extends Thread {
         }
         catch(SQLException e){
             System.out.println("SQL exception"+e);
+            e.printStackTrace();
         }
         catch(ArrayIndexOutOfBoundsException e){
             System.out.println("Array Index out of bounds");
@@ -337,6 +338,7 @@ public class DataServer extends Thread {
                 }
                 catch (SQLException e){
                     System.out.println("Exception at statemnet.close()");
+                    e.printStackTrace();
                 }
             }
             if(results!=null){
@@ -345,6 +347,7 @@ public class DataServer extends Thread {
                 }
                 catch(SQLException e){
                     System.out.println("Exception at results.close()");
+                    e.printStackTrace();
                 }
             }
             if(connection!=null){
@@ -353,6 +356,7 @@ public class DataServer extends Thread {
                 }
                 catch(SQLException e){
                     System.out.println("Exception at connection.close()");
+                    e.printStackTrace();
                 }
             }
         }
